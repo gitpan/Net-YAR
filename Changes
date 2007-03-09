@@ -1,0 +1,9 @@
+Net::YAR Changes Log
+====================
+
+0.049 - 2007-01-16
+    * Add more documentation and examples.
+
+0.048 - 2006-11-10
+    * First public release of FastDomain.Com API
+      client transport software.
