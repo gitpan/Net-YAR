@@ -1,6 +1,9 @@
 Net::YAR Changes Log
 ====================
 
+1.065 - 2007-03-26
+    * Clean up log_file and log_obj options.
+
 0.049 - 2007-01-16
     * Add more documentation and examples.
 

@@ -111,11 +111,20 @@ Net::YAR SPECIFIC METHODS
         Default /cgi/yar. Should return the path to locate on host for YAR
         commands.
 
-    logger
-        Default undef. Can be initialized during the "new" method. Should
-        contain an object that can do the "print" method. Any external
-        request and any external response that occurs during play_method
-        will be passed to the print method.
+    log_file
+        Default undef. If set to a true value, will be used by the log_obj
+        method to return an IO::File object that will be used to log the
+        methods that were called.
+
+        This may be initilized during the new method by passing log_file as
+        a named argument.
+
+    log_obj
+        Default action is to look for a file returned by the log_file method
+        and open an IO::File object on it. Can be initialized during the
+        "new" method. Should contain an object that can do the "print"
+        method. Any external request and any external response that occurs
+        during play_method will be passed to the print method.
 
         The following is a very simple base class that records the details
         in a scalar, though it would be easy to log to a file or a database:

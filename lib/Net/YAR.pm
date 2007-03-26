@@ -13,18 +13,11 @@ use HTTP::Request;
 use HTTP::Headers;
 use vars qw($AUTOLOAD $VERSION);
 
-$VERSION = sprintf "%d.%03d", q$Revision: 1.63 $ =~ /(\d+)/g;
+$VERSION = sprintf "%d.%03d", q$Revision: 1.65 $ =~ /(\d+)/g;
 
 sub new {
     my $class = shift;
     my $args  = shift || {};
-    if (my $filename = $args->{logfile}) {
-        require IO::File;
-        if (my $io = new IO::File ">>$filename") {
-            $io->autoflush(1);
-            $args->{io} = $io;
-        }
-    }
     return bless {%$args}, $class;
 }
 
@@ -33,7 +26,21 @@ sub api_pass { my $self = shift; $self->{'api_pass'} || $self->{'pass'} || croak
 sub api_host { my $self = shift; $self->{'api_host'} || $self->{'host'} || croak "Missing api_host" }
 sub api_port { my $self = shift; $self->{'api_port'} || $self->{'port'} || 80 }
 sub api_path { my $self = shift; $self->{'api_path'} || $self->{'path'} || '/cgi/yar' }
-sub logger   { shift->{'logger'}   || undef }
+sub log_obj   {
+    my $self = shift;
+    if (! $self->{'log_obj'}) {
+        if (my $file = $self->log_file) {
+            require IO::File;
+            if (my $io = new IO::File ">>$file") {
+                $io->autoflush(1);
+                $self->{'log_obj'} = $io;
+            }
+        }
+    }
+    return $self->{'log_obj'};
+}
+sub log_file { shift->{'log_file'} || undef }
+
 
 sub serialize_type {
     return shift->{'serialize_type'} ||=
@@ -79,17 +86,17 @@ sub play_method {
     eval {
         my $req = HTTP::Request->new('POST', $url, HTTP::Headers->new, $request);
 
-        my $logger = $self->logger;
-        if ($logger) {
+        my $log_obj = $self->log_obj;
+        if ($log_obj) {
             my $id = $args->{'domain'} || $args->{'contact_id'} || $args->{'user_id'} || "";
             $id = join ", ", @$id if ref($id) eq 'ARRAY';
-            $logger->print(scalar(localtime).": REQUEST: $meth - $id\n",$request,"\n");
+            $log_obj->print(scalar(localtime).": REQUEST: $meth - $id\n",$request,"\n");
         }
 
         $resp = LWP::UserAgent->new->request($req);
 
-        if ($logger) {
-            $logger->print(scalar(localtime).": RESPONSE (".($resp->code)."):\n",$resp->content,"\n\n");
+        if ($log_obj) {
+            $log_obj->print(scalar(localtime).": RESPONSE (".($resp->code)."):\n",$resp->content,"\n\n");
         }
     };
     if (! $resp || ! $resp->is_success) {
@@ -612,9 +619,17 @@ Default 80.  Should return the port to connect to for YAR commands.
 
 Default /cgi/yar.  Should return the path to locate on host for YAR commands.
 
-=item logger
+=item log_file
 
-Default undef.  Can be initialized during the "new" method.  Should contain an
+Default undef.  If set to a true value, will be used by the log_obj method to return
+an IO::File object that will be used to log the methods that were called.
+
+This may be initilized during the new method by passing log_file as a named argument.
+
+=item log_obj
+
+Default action is to look for a file returned by the log_file method and open
+an IO::File object on it.  Can be initialized during the "new" method.  Should contain an
 object that can do the "print" method.  Any external request and any external
 response that occurs during play_method will be passed to the print method.
 
