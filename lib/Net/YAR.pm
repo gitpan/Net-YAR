@@ -13,7 +13,7 @@ use HTTP::Request;
 use HTTP::Headers;
 use vars qw($AUTOLOAD $VERSION);
 
-$VERSION = sprintf "%d.%03d", q$Revision: 1.65 $ =~ /(\d+)/g;
+$VERSION = sprintf "%d.%03d", q$Revision: 1.67 $ =~ /(\d+)/g;
 
 sub new {
     my $class = shift;
@@ -65,11 +65,8 @@ sub play_method {
     my $port = $self->api_port;
     my $path = $self->api_path;
 
-    ### add method && authentication
-    local $args->{'method'} = $meth;
-    local $args->{'authentication'} = $args->{'authentication'} ? $args->{'authentication'} : "$user/$pass";
-
     ### setup the request
+    local $args->{'method'} = $meth;
     my $request = eval { $self->serialize_request($args) };
     if (! $request) {
         return Net::YAR::Fault->new({
@@ -83,8 +80,16 @@ sub play_method {
     ### send the request
     my $resp;
     my $url  = "http://$host:$port$path";
+    my @head;
+    if (! $args->{'authentication'}) {
+        my $auth = "$user/$pass";
+        $auth =~ s|([^\w.\-\:/])|sprintf('%%%02X', ord $1)|eg;
+        push @head, (Cookie => "authentication=$auth;");
+    }
+
     eval {
-        my $req = HTTP::Request->new('POST', $url, HTTP::Headers->new, $request);
+        my $req = HTTP::Request->new('POST', $url, HTTP::Headers->new(@head), $request);
+        #warn $req->as_string;;
 
         my $log_obj = $self->log_obj;
         if ($log_obj) {

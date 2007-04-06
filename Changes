@@ -1,6 +1,10 @@
 Net::YAR Changes Log
 ====================
 
+1.067 - 2007-04-05
+    * Pass authentication via cookies.
+    * Allow Makefile.PL to require at least one serialization library.
+
 1.065 - 2007-03-26
     * Clean up log_file and log_obj options.
 

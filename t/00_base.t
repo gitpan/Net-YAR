@@ -54,6 +54,10 @@ ok(eval { $yar->api_host }, "Can get initialized api_host");
 my $r = $yar->noop;
 if (! $r) {
     SKIP: {
+        require Data::Dumper;
+        my $s = Data::Dumper::Dumper($r);
+        $s =~ s/^/\#/gm;
+        print $s;
         skip("TEST_NET_YAR_CONNECT could not connect: ".(eval { $r->code } || 'unknown'), N_TESTS - 14);
     };
     exit;
@@ -125,12 +129,12 @@ ok(($yar = Net::YAR->new({
     api_user => $user,
     api_pass => $pass,
     api_host => $host,
-    logger   => MyLogger->new,
+    log_obj  => MyLogger->new,
 })), "Got new object");
 
-ok(! $yar->logger->as_string, "No log yet");
+ok(! $yar->log_obj->as_string, "No log yet");
 ok(($r = $yar->noop), "Ran noop");
-#print $yar->logger->as_string;
-ok($yar->logger->as_string, "Got log info");
+#print $yar->logobj->as_string;
+ok($yar->log_obj->as_string, "Got log info");
 
 ###----------------------------------------------------------------###

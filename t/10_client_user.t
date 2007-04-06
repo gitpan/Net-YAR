@@ -33,6 +33,10 @@ ok(($yar = Net::YAR->new({
 my $r = eval { $yar->noop };
 if (! $r) {
     SKIP: {
+        require Data::Dumper;
+        my $s = Data::Dumper::Dumper($r);
+        $s =~ s/^/\#/gm;
+        print $s;
         skip("TEST_NET_YAR_CONNECT could not connect: ".(eval { $r->code } || 'unknown'), 19);
     };
     exit;
