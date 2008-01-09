@@ -9,6 +9,7 @@
 use constant N_TESTS => 51;
 use strict;
 use Test::More tests => N_TESTS;
+use Data::Dumper qw(Dumper);
 
 if (! $ENV{'TEST_NET_YAR_CONNECT'}) {
     SKIP: {
@@ -34,8 +35,7 @@ ok(($yar = Net::YAR->new({
 my $r = eval { $yar->noop };
 if (! $r) {
     SKIP: {
-        require Data::Dumper;
-        my $s = Data::Dumper::Dumper($r);
+        my $s = Dumper($r);
         $s =~ s/^/\#/gm;
         print $s;
         skip("TEST_NET_YAR_CONNECT could not connect: ".(eval { $r->code } || 'unknown'), N_TESTS - 3);
@@ -111,7 +111,7 @@ END {
 ###----------------------------------------------------------------###
 
 my $nameservers  = ["ns1.fastdomain.com", "ns2.fastdomain.com"];
-my $nameservers2 = ['ns1.hostmonster.com', 'ns2.hostmonster.com'];
+my $nameservers2 = ['ns1.fastdomain.org', 'ns2.fastdomain.org']; # use a different tld so they will go through more easily
 
 my $domain = $user .'-test-20-client-domain.com';
 $domain =~ tr/a-z0-9\-.//cd;
@@ -168,6 +168,9 @@ $r = $yar->domain->db_update({
     nameservers_remove => $nameservers,
 });
 ok($r, "Ran update");
+if (! $r) {
+    print Dumper $r;
+}
 
 $r = $yar->domain->info({domain => $domain});
 ok($r, "Got the domain info");
@@ -262,7 +265,7 @@ $r = $yar->offer->search({
 });
 ok($r, "Ran offer search");
 
-#use Data::Dumper; print Dumper $r->data;
+# print Dumper $r->data;
 
 
 ok($r = $yar->domain->db_delete({ domain     => $domain}), "Deleted the domain");

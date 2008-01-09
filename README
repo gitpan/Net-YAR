@@ -90,6 +90,7 @@ Net::YAR SPECIFIC METHODS
                 api_pass => $pass,
                 api_host => $host,
                 serialize_type => 'json',
+                ssl      => 1,
             });
 
     api_user
@@ -105,7 +106,15 @@ Net::YAR SPECIFIC METHODS
         initialized during the new method.
 
     api_port
-        Default 80. Should return the port to connect to for YAR commands.
+        Default 443 if use_ssl is true, 80 otherwise. Should return the port
+        to connect to for YAR commands.
+
+    use_ssl
+        Defaults to $self->{use_ssl} which defaults to $self->{ssl} which
+        defaults to 0.
+
+        Setting to a true value will perform requests across a secure
+        connection.
 
     api_path
         Default /cgi/yar. Should return the path to locate on host for YAR

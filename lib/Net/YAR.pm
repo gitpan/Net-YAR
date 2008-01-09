@@ -13,7 +13,7 @@ use HTTP::Request;
 use HTTP::Headers;
 use vars qw($AUTOLOAD $VERSION);
 
-$VERSION = sprintf "%d.%03d", q$Revision: 1.67 $ =~ /(\d+)/g;
+$VERSION = sprintf "%d.%03d", q$Revision: 1.69 $ =~ /(\d+)/g;
 
 sub new {
     my $class = shift;
@@ -24,8 +24,9 @@ sub new {
 sub api_user { my $self = shift; $self->{'api_user'} || $self->{'user'} || croak "Missing api_user" }
 sub api_pass { my $self = shift; $self->{'api_pass'} || $self->{'pass'} || croak "Missing api_pass" }
 sub api_host { my $self = shift; $self->{'api_host'} || $self->{'host'} || croak "Missing api_host" }
-sub api_port { my $self = shift; $self->{'api_port'} || $self->{'port'} || 80 }
+sub api_port { my $self = shift; $self->{'api_port'} || $self->{'port'} || $self->use_ssl ? 443 : 80 }
 sub api_path { my $self = shift; $self->{'api_path'} || $self->{'path'} || '/cgi/yar' }
+sub use_ssl  { my $self = shift; $self->{'use_ssl'}  || $self->{'ssl'}  || 0 }
 sub log_obj   {
     my $self = shift;
     if (! $self->{'log_obj'}) {
@@ -79,7 +80,8 @@ sub play_method {
 
     ### send the request
     my $resp;
-    my $url  = "http://$host:$port$path";
+    my $proto = $self->use_ssl ? 'https' : 'http';
+    my $url   = "$proto://$host:$port$path";
     my @head;
     if (! $args->{'authentication'}) {
         my $auth = "$user/$pass";
@@ -205,6 +207,7 @@ sub parse_response {
 
         } elsif ($content =~ /\A \s* \{ /sx) {
             require JSON;
+            local $JSON::UnMapping = 1;
             $data = JSON->new->jsonToObj($content);
 
         } elsif ($content =~ /\A ---\s+ /sx) {
@@ -599,6 +602,7 @@ the Net::YAR class.
         api_pass => $pass,
         api_host => $host,
         serialize_type => 'json',
+        ssl      => 1,
     });
 
 =item api_user
@@ -618,7 +622,14 @@ during the new method.
 
 =item api_port
 
-Default 80.  Should return the port to connect to for YAR commands.
+Default 443 if use_ssl is true, 80 otherwise.  Should return the port
+to connect to for YAR commands.
+
+=item use_ssl
+
+Defaults to $self->{use_ssl} which defaults to $self->{ssl} which defaults to 0.
+
+Setting to a true value will perform requests across a secure connection.
 
 =item api_path
 
@@ -626,20 +637,23 @@ Default /cgi/yar.  Should return the path to locate on host for YAR commands.
 
 =item log_file
 
-Default undef.  If set to a true value, will be used by the log_obj method to return
-an IO::File object that will be used to log the methods that were called.
+Default undef.  If set to a true value, will be used by the log_obj
+method to return an IO::File object that will be used to log the
+methods that were called.
 
-This may be initilized during the new method by passing log_file as a named argument.
+This may be initilized during the new method by passing log_file as a
+named argument.
 
 =item log_obj
 
-Default action is to look for a file returned by the log_file method and open
-an IO::File object on it.  Can be initialized during the "new" method.  Should contain an
-object that can do the "print" method.  Any external request and any external
-response that occurs during play_method will be passed to the print method.
+Default action is to look for a file returned by the log_file method
+and open an IO::File object on it.  Can be initialized during the
+"new" method.  Should contain an object that can do the "print"
+method.  Any external request and any external response that occurs
+during play_method will be passed to the print method.
 
-The following is a very simple base class that records the details in a scalar,
-though it would be easy to log to a file or a database:
+The following is a very simple base class that records the details in
+a scalar, though it would be easy to log to a file or a database:
 
     package MyLogger;
 

@@ -1,6 +1,13 @@
 Net::YAR Changes Log
 ====================
 
+1.069 - 2008-01-09
+    * Add use_ssl option for https support.
+    * Make test suite pass with non-ote users.
+
+1.068 - 2007-11-02
+    * Add Unmapping option to JSON import to keep JSON::NotString from appearing.
+
 1.067 - 2007-04-05
     * Pass authentication via cookies.
     * Allow Makefile.PL to require at least one serialization library.
