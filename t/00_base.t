@@ -6,9 +6,10 @@
 
 =cut
 
-use constant N_TESTS => 35;
+use constant N_TESTS => 43;
 use strict;
 use Test::More tests => N_TESTS;
+use Data::Dumper qw(Dumper);
 
 use_ok('Net::YAR');
 
@@ -54,8 +55,8 @@ ok(eval { $yar->api_host }, "Can get initialized api_host");
 my $r = $yar->noop;
 if (! $r) {
     SKIP: {
-        require Data::Dumper;
-        my $s = Data::Dumper::Dumper($r);
+        diag Dumper($r->data);
+        my $s = Dumper($r);
         $s =~ s/^/\#/gm;
         print $s;
         skip("TEST_NET_YAR_CONNECT could not connect: ".(eval { $r->code } || 'unknown'), N_TESTS - 14);
@@ -100,6 +101,7 @@ ok(($yar = Net::YAR->new({
 })), "Got new object");
 
 $r = $yar->util->noop;
+#diag Dumper $r;
 ok(! $r, "Ran with intentional connect error ($@)");
 
 ###----------------------------------------------------------------###
@@ -136,5 +138,21 @@ ok(! $yar->log_obj->as_string, "No log yet");
 ok(($r = $yar->noop), "Ran noop");
 #print $yar->logobj->as_string;
 ok($yar->log_obj->as_string, "Got log info");
+
+###----------------------------------------------------------------###
+### test serialization types
+
+foreach my $type (qw(json xml yaml uri)) {
+    local $yar->{'serialize_type'} = $type;
+    my $r = $yar->util->noop({foo => 'bar'});
+    if ($r) {
+        ok(1, "Ran noop with type $type");
+        is($r->type, 'success', "Got the right type");
+    } else {
+        SKIP: {
+            skip("Module for type $type doesn't appear to be installed", 1) for 1 .. 2;
+        };
+    }
+}
 
 ###----------------------------------------------------------------###

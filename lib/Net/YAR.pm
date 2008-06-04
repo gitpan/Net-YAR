@@ -11,9 +11,9 @@ use Carp qw(croak confess);
 use LWP::UserAgent;
 use HTTP::Request;
 use HTTP::Headers;
-use vars qw($AUTOLOAD $VERSION);
+use vars qw($AUTOLOAD $VERSION $JSON_ENCODE $JSON_DECODE);
 
-$VERSION = sprintf "%d.%03d", q$Revision: 1.69 $ =~ /(\d+)/g;
+$VERSION = sprintf "%d.%03d", q$Revision: 1.70 $ =~ /(\d+)/g;
 
 sub new {
     my $class = shift;
@@ -145,7 +145,8 @@ sub serialize_request {
         }
     } elsif ($type eq 'json') {
         require JSON;
-        $request = JSON->new->objToJson({request => $args}, {autoconv => 0});
+        $JSON_ENCODE ||= JSON->VERSION > 1.98 ? 'encode' : 'objToJSon';
+        $request = JSON->new->$JSON_ENCODE({request => $args}, {autoconv => 0});
 
     } elsif ($type eq 'xml') {
         require XML::Simple;
@@ -187,7 +188,7 @@ sub parse_response {
         my $data;
         if (!$content) {
             $data = { response => { type => "error", error => { code => "empty"} } };
-        } elsif ($content =~ /\A \s* < /sx) {
+        } elsif ($content =~ /\A \s* <\?xml /sx) {
             require XML::Simple;
             my $hash = XML::Simple::XMLin($content,
                                           SuppressEmpty => '',
@@ -207,8 +208,9 @@ sub parse_response {
 
         } elsif ($content =~ /\A \s* \{ /sx) {
             require JSON;
+            $JSON_DECODE ||= JSON->VERSION > 1.98 ? 'decode' : 'jsonToObj';
             local $JSON::UnMapping = 1;
-            $data = JSON->new->jsonToObj($content);
+            $data = JSON->new->$JSON_DECODE($content);
 
         } elsif ($content =~ /\A ---\s+ /sx) {
             if (eval {require YAML::Syck}) {
@@ -218,7 +220,7 @@ sub parse_response {
                 $data = (YAML::Load($content))[0];
             }
 
-        } else {
+        } elsif ($content =~ /\A [\w\.]+= /sx) {
             eval {
                 require Data::URIEncode;
             } or do {
@@ -227,6 +229,8 @@ sub parse_response {
                 Carp::confess(Data::Dumper::Dumper([$args, error => $@]));
             };
             $data = Data::URIEncode::query_to_complex($content);
+        } else {
+            die 'unknown_serialization';
         }
 
         $response = $data->{'response'} || confess "Invalid response";
@@ -242,7 +246,7 @@ sub parse_response {
     $obj_args->{'method'}   = $args->{'method'};
 
     ### return the appropriate object
-    if (! $obj_args->{'type'} || $obj_args->{'type'} eq 'error') {
+    if (! $obj_args->{'type'} || $obj_args->{'type'} eq 'error' || $obj_args->{'type'} eq 'parse_error') {
         return Net::YAR::Fault->new($obj_args);
     } else {
         return Net::YAR::Response->new($obj_args);

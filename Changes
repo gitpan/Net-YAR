@@ -1,6 +1,9 @@
 Net::YAR Changes Log
 ====================
 
+1.070 - 2008-06-04
+    * Allow for working with JSON 2 (as well as JSON 1) API.
+
 1.069 - 2008-01-09
     * Add use_ssl option for https support.
     * Make test suite pass with non-ote users.
