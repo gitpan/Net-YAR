@@ -13,7 +13,7 @@ use HTTP::Request;
 use HTTP::Headers;
 use vars qw($AUTOLOAD $VERSION $JSON_ENCODE $JSON_DECODE);
 
-$VERSION = sprintf "%d.%03d", q$Revision: 1.70 $ =~ /(\d+)/g;
+$VERSION = sprintf "%d.%03d", q$Revision: 1.76 $ =~ /(\d+)/g;
 
 sub new {
     my $class = shift;
@@ -100,7 +100,8 @@ sub play_method {
             $log_obj->print(scalar(localtime).": REQUEST: $meth - $id\n",$request,"\n");
         }
 
-        $resp = LWP::UserAgent->new->request($req);
+        my @lwp_args = eval { $args->{'lwp_args'} ? @{ $args->{'lwp_args'} } : () };
+        $resp = LWP::UserAgent->new(@lwp_args)->request($req);
 
         if ($log_obj) {
             $log_obj->print(scalar(localtime).": RESPONSE (".($resp->code)."):\n",$resp->content,"\n\n");
@@ -146,7 +147,11 @@ sub serialize_request {
     } elsif ($type eq 'json') {
         require JSON;
         $JSON_ENCODE ||= JSON->VERSION > 1.98 ? 'encode' : 'objToJSon';
-        $request = JSON->new->$JSON_ENCODE({request => $args}, {autoconv => 0});
+        if ($JSON_ENCODE eq 'encode') {
+            $request = JSON->new->encode({request => $args});
+        } else {
+            $request = JSON->new->objToJSon({request => $args}, {autoconv => 0});
+        }
 
     } elsif ($type eq 'xml') {
         require XML::Simple;
@@ -267,8 +272,14 @@ sub AUTOLOAD {
     if ($method =~ /^(\w+_search)_all$/) {
         return $self->_all_search($1, @_);
 
+    }
+    ### magically add _iter capability to all searches
+    elsif ($method =~ /^(\w+_search)_iter$/) {
+        return $self->_iter_search($1, @_);
+
+    }
     ### handle all $yar->domain_register style commands
-    } elsif ($method =~ /^ (domain|contact|user|util|[^\W_]+) _+ (\w+) $/x) {
+    elsif ($method =~ /^ (domain|contact|user|util|[^\W_]+) _+ (\w+) $/x) {
         my $yar_method = "$1.$2";
 
         my $resp;
@@ -327,7 +338,7 @@ sub _all_search {
                     method   => "${meth}_all",
                     type     => 'error',
                     code     => 'invalid_key',
-                    key      => 'key',
+                    key      => $UNIQ_KEY,
                     response => $resp,
                 }) if ! exists $row->{$UNIQ_KEY};
 
@@ -397,6 +408,56 @@ sub _all_search {
 
     return $RESP;
 }
+
+###----------------------------------------------------------------###
+### use the standard YAR API search method's pagination features to
+### obtain all results for a given search one iteration at a time
+
+sub _iter_search {
+    my ($self, $meth, $args) = @_;
+
+    $args->{'rows_per_page'} ||= 10_000;
+    $args->{'page'}          ||= 1;
+    $args->{'extra_rows'}    ||= 10;
+    if (!$args->{'unique_key'}) {
+        if (my $o = $args->{'order_by'}) {
+            $o = [ $o ] unless ref $o eq "ARRAY";
+            foreach my $field (@$o) {
+                if ($field =~ /^(\w+)$/) {
+                    $args->{'unique_key'} = $1;
+                    last;
+                }
+            }
+        }
+    }
+    croak "Arg [unique_key] could not be determined for ITER [$meth]" if !$args->{'unique_key'};
+    my $response = $self->$meth($args);
+    return $response if !$response;
+    my %uniq = ();
+    my $tie_obj = undef;
+    eval {
+        require DB_File;
+        require Fcntl;
+        my $unique_hash_file = $args->{'unique_hash_file'} || "/tmp/iter_[$args->{'unique_key'}]_$$.db";
+        $tie_obj = tie(%uniq, "DB_File", $unique_hash_file, Fcntl::O_RDWR()|Fcntl::O_CREAT(), 0666) or die "$unique_hash_file: tie: $!";
+        # Anonymous file backend so it will disappear once the process dies
+        # but it's actually still on disk instead of wasting precious memory.
+        unlink $unique_hash_file;
+    } or warn "DB_File anonymous file tie failed: $@";
+    my $iter = {
+        %$response,
+        yar      => $self,
+        request  => $args,
+        response => $response,
+        method   => $meth."_iter",
+        curr     => 0,
+        i        => 0,
+        tie_obj  => $tie_obj,
+        uniq     => \%uniq,
+    };
+    return bless $iter, "Net::YAR::Iter";
+}
+
 
 ###----------------------------------------------------------------###
 ### provide older shortcuts for common util operations
@@ -494,9 +555,69 @@ sub new_chain_proxy {
 {
     package Net::YAR::Fault;
 
+    use strict;
     use base qw(Net::YAR::Response);
 
     sub is_fault { 1 }
+}
+
+{
+    package Net::YAR::Iter;
+
+    use strict;
+    use Carp qw(croak confess);
+    use base qw(Net::YAR::Response);
+
+    sub next {
+        my $self = shift;
+
+        my $response = $self->response;
+        if ($self->{'i'} < scalar @{ $response->data->{'rows'} }) {
+            # Still more entries left since last query
+            # so just return the next one in line.
+            $self->{'curr'}++;
+            my $result = $response->data->{'rows'}->[$self->{'i'}++];
+            my $key = $self->request->{'unique_key'};
+            return Net::YAR::Fault->new({
+                method   => $self->method,
+                type     => 'error',
+                code     => 'invalid_key',
+                key      => $key,
+                response => $response,
+            }) if ! exists $result->{$key};
+            $result->{$key} = "" if !defined $result->{$key};
+            if ($self->{'uniq'}->{$result->{$key}}) {
+                $self->{'curr'}--;
+                return $self->next;
+            }
+            $self->{'uniq'}->{$result->{$key}} = 1;
+            return $result;
+        }
+
+        if ($self->{'i'} >= $self->data->{'rows_per_page'}) {
+            # Hit the end of this page, but there is probably more, so query the next page
+            $self->{'i'} = 0;
+            $self->request->{'page'}++;
+            my $meth = $self->method;
+            $response = $self->{response} = $self->{'yar'}->$meth($self->request);
+            if ($response) {
+                # Recursive call
+                return $self->next;
+            }
+            # Return whatever the failure is.
+            return $response;
+        }
+
+        # Exhausted all rows
+        return Net::YAR::Fault->new({
+            method   => $self->method,
+            type     => 'eos',
+            code     => 'eos',
+            key      => 'key',
+            response => "--discarded--\n",
+        });
+    }
+
 }
 
 ###----------------------------------------------------------------###
@@ -523,7 +644,13 @@ __END__
     # OR
     # my $resp = $yar->util_noop;  # calls YAR method util.noop
 
-
+    use Data::Dumper qw(Dumper);
+    if (! $resp) { # error
+        print Dumper $resp->code;
+        print Dumper $resp;
+    } else {
+        print Dumper $resp->data;
+    }
 
 
     ### information to register a domain in one pass
@@ -547,9 +674,9 @@ __END__
             email        => 'foo@my.company.com',
             street1      => 'Techway',
             street2      => '',
-            city         => 'Orem',
+            city         => 'Provo',
             province     => 'UT',
-            postal_code  => '84058',
+            postal_code  => '84606',
             country      => 'US',
             phone        => '+1.8017659400',
             fax          => '',
@@ -780,9 +907,9 @@ can be used to install domains.
         email        => 'foo@my.company.com',
         street1      => 'Techway',
         street2      => '',
-        city         => 'Orem',
+        city         => 'Provo',
         province     => 'UT',
-        postal_code  => '84058',
+        postal_code  => '84606',
         country      => 'US',
         phone        => '+1.8017659400',
         fax          => '',
@@ -935,9 +1062,9 @@ would install a user, invoice, order, contacts, and domain.
             email        => 'foo@my.company.com',
             street1      => 'Techway',
             street2      => '',
-            city         => 'Orem',
+            city         => 'Provo',
             province     => 'UT',
-            postal_code  => '84058',
+            postal_code  => '84606',
             country      => 'US',
             phone        => '+1.8017659400',
             fax          => '',
@@ -1022,9 +1149,9 @@ by passing arguments in the following ways:
             email        => 'foo@my.company.com',
             street1      => 'Techway',
             street2      => '',
-            city         => 'Orem',
+            city         => 'Provo',
             province     => 'UT',
-            postal_code  => '84058',
+            postal_code  => '84606',
             country      => 'US',
             phone        => '+1.8017659400',
             fax          => '',
@@ -1160,9 +1287,9 @@ Sample transfer_in_request:
             organization => 'My Company Test',
             email        => 'foo@my.company.com',
             street1      => 'Techway',
-            city         => 'Orem',
+            city         => 'Provo',
             province     => 'UT',
-            postal_code  => '84058',
+            postal_code  => '84606',
             country      => 'US',
             phone        => '+1.8017659400',
         },

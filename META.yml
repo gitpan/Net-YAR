@@ -1,14 +1,17 @@
-# http://module-build.sourceforge.net/META-spec.html
-#XXXXXXX This is a prototype!!!  It will change in the future!!! XXXXX#
-name:         Net-YAR
-version:      1.070
-version_from: lib/Net/YAR.pm
-installdirs:  site
-requires:
+--- #YAML:1.0
+name:                Net-YAR
+version:             1.076
+abstract:            Perl interface to the YAR (Yet Another Registrar) API
+license:             ~
+author:              
+    - Paul Seamons
+generated_by:        ExtUtils::MakeMaker version 6.42
+distribution_type:   module
+requires:     
     HTTP::Headers:                 0
     HTTP::Request:                 0
-    JSON:                          0
     LWP::UserAgent:                0
-
-distribution_type: module
-generated_by: ExtUtils::MakeMaker version 6.30_01
+    YAML::Syck:                    0
+meta-spec:
+    url:     http://module-build.sourceforge.net/META-spec-v1.3.html
+    version: 1.3

@@ -10,11 +10,22 @@ SYNOPSIS
             api_host => 'api.fastdomain.com',
         });
 
+
+
         ### test if the server can connect
 
         my $resp = $yar->util->noop; # calls YAR method util.noop
         # OR
         # my $resp = $yar->util_noop;  # calls YAR method util.noop
+
+        use Data::Dumper qw(Dumper);
+        if (! $resp) { # error
+            print Dumper $resp->code;
+            print Dumper $resp;
+        } else {
+            print Dumper $resp->data;
+        }
+
 
         ### information to register a domain in one pass
 
@@ -37,9 +48,9 @@ SYNOPSIS
                 email        => 'foo@my.company.com',
                 street1      => 'Techway',
                 street2      => '',
-                city         => 'Orem',
+                city         => 'Provo',
                 province     => 'UT',
-                postal_code  => '84058',
+                postal_code  => '84606',
                 country      => 'US',
                 phone        => '+1.8017659400',
                 fax          => '',
@@ -251,9 +262,9 @@ YAR METHODS
                 email        => 'foo@my.company.com',
                 street1      => 'Techway',
                 street2      => '',
-                city         => 'Orem',
+                city         => 'Provo',
                 province     => 'UT',
-                postal_code  => '84058',
+                postal_code  => '84606',
                 country      => 'US',
                 phone        => '+1.8017659400',
                 fax          => '',
@@ -388,9 +399,9 @@ YAR METHODS
                     email        => 'foo@my.company.com',
                     street1      => 'Techway',
                     street2      => '',
-                    city         => 'Orem',
+                    city         => 'Provo',
                     province     => 'UT',
-                    postal_code  => '84058',
+                    postal_code  => '84606',
                     country      => 'US',
                     phone        => '+1.8017659400',
                     fax          => '',
@@ -471,9 +482,9 @@ YAR METHODS
                         email        => 'foo@my.company.com',
                         street1      => 'Techway',
                         street2      => '',
-                        city         => 'Orem',
+                        city         => 'Provo',
                         province     => 'UT',
-                        postal_code  => '84058',
+                        postal_code  => '84606',
                         country      => 'US',
                         phone        => '+1.8017659400',
                         fax          => '',
@@ -602,9 +613,9 @@ YAR METHODS
                     organization => 'My Company Test',
                     email        => 'foo@my.company.com',
                     street1      => 'Techway',
-                    city         => 'Orem',
+                    city         => 'Provo',
                     province     => 'UT',
-                    postal_code  => '84058',
+                    postal_code  => '84606',
                     country      => 'US',
                     phone        => '+1.8017659400',
                 },

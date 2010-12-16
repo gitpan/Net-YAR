@@ -1,6 +1,13 @@
 Net::YAR Changes Log
 ====================
 
+1.076 - 2010-01-12
+    * Make sure JSON::encode for JSON 2.0 is used properly
+
+1.075 - 2009-05-21
+    * Add *_search_iter capabilities.
+    * Allow for optional LWP args.
+
 1.070 - 2008-06-04
     * Allow for working with JSON 2 (as well as JSON 1) API.
 
