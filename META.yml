@@ -1,6 +1,6 @@
 --- #YAML:1.0
 name:               Net-YAR
-version:            1.082
+version:            1.083
 abstract:           Perl interface to the YAR (Yet Another Registrar) API
 author:
     - Paul Seamons

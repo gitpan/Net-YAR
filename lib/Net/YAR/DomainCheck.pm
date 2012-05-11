@@ -7,8 +7,9 @@ Net::YAR::DomainCheck - Emergency fail over domain.check implementations in case
 =cut
 
 use strict;
+use Net::YAR;
 
-our $VERSION = eval { require Net::YAR; return $Net::YAR::VERSION; };
+our $VERSION = $Net::YAR::VERSION;
 our $YAR_TIMEOUT   = 5;  # Seconds
 our $WHOIS_TIMEOUT = 29; # Seconds
 our $WHOIS_PORT    = 43; # nicname

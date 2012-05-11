@@ -20,7 +20,7 @@ use vars qw(
     $DEFAULT_RETRY_INTERVAL
 );
 
-$VERSION = sprintf "%d.%03d", q$Revision: 1.82 $ =~ /(\d+)/g;
+$VERSION = sprintf "%d.%03d", q$Revision: 1.83 $ =~ /(\d+)/g;
 $DEFAULT_RETRY_MAX = 3; # Retry up to this many times when network problems occur.
 $DEFAULT_RETRY_INTERVAL = 15; # Seconds to wait after response failure before trying again.
 

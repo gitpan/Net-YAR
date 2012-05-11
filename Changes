@@ -1,6 +1,9 @@
 Net::YAR Changes Log
 ====================
 
+1.083 - 0212-05-11
+    * Less convoluted DomainCheck module VERSIONing
+
 1.082 - 2012-04-27
     * Add yar params 'retry_max' and 'retry_interval' to allow custom retries in case of network failure.
 
