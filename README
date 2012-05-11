@@ -122,10 +122,15 @@ Net::YAR SPECIFIC METHODS
 
     use_ssl
         Defaults to $self->{use_ssl} which defaults to $self->{ssl} which
-        defaults to 0.
+        defaults to 1.
 
         Setting to a true value will perform requests across a secure
-        connection.
+        connection. Production systems will only support ssl.
+
+    ssl_verify_hostname
+        Defaults to $self->{ssl_verify_hostname} which defaults 0.
+
+        Setting to a true value will perform certificate matching.
 
     api_path
         Default /cgi/yar. Should return the path to locate on host for YAR

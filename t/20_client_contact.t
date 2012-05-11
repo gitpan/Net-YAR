@@ -7,11 +7,12 @@
 =cut
 
 use strict;
-use Test::More tests => 26;
+use Test::More tests => 25;
+use Data::Dumper qw(Dumper);
 
 if (! $ENV{'TEST_NET_YAR_CONNECT'}) {
     SKIP: {
-        skip('Set TEST_NET_YAR_CONNECT to "user/pass/host" to run tests requiring connection', 26);
+        skip('Set TEST_NET_YAR_CONNECT to "user/pass/host" to run tests requiring connection', 25);
     };
     exit;
 }
@@ -72,7 +73,12 @@ if ($r) {
 my $user_id = $r->data->{'user_id'};
 ok($user_id, "Got a new user_id ($user_id)");
 
-END { ok($yar->user_delete({username => $username}), "Deleted the user") if $user_id };
+END {
+    if ($user_id) {
+        $r = $yar->user_delete({username => $username});
+        ok($r, "Deleted the user") || diag Dumper $r;
+    }
+};
 
 ###----------------------------------------------------------------###
 ### add an contact
@@ -95,7 +101,7 @@ $info = {
     fax          => '',
 };
 
-for (qw(tld user_id first_name last_name email street1 city province postal_code country phone)) {
+for (qw(tld user_id first_name last_name email street1 city province country phone)) {
     local $info->{$_};
     ok(! $yar->contact_create($info), "Correctly couldn't setup contact with missing $_");
 }

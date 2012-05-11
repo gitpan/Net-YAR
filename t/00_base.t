@@ -64,6 +64,8 @@ if (! $r) {
     exit;
 }
 
+local $Net::YAR::DEFAULT_RETRY_MAX = 0;
+
 ok($r, "Ran noop");
 ok($r->{'type'} eq 'success', "Got noop success");
 

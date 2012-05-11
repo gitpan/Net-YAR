@@ -34,6 +34,7 @@ ok(($yar = Net::YAR->new({
 
 my $r = eval { $yar->noop };
 if (! $r) {
+    $r = "$@" if ! defined $r;
     SKIP: {
         my $s = Dumper($r);
         $s =~ s/^/\#/gm;

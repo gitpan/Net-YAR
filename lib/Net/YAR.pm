@@ -11,9 +11,18 @@ use Carp qw(croak confess);
 use LWP::UserAgent;
 use HTTP::Request;
 use HTTP::Headers;
-use vars qw($AUTOLOAD $VERSION $JSON_ENCODE $JSON_DECODE);
+use vars qw(
+    $AUTOLOAD
+    $VERSION
+    $JSON_ENCODE
+    $JSON_DECODE
+    $DEFAULT_RETRY_MAX
+    $DEFAULT_RETRY_INTERVAL
+);
 
-$VERSION = sprintf "%d.%03d", q$Revision: 1.76 $ =~ /(\d+)/g;
+$VERSION = sprintf "%d.%03d", q$Revision: 1.82 $ =~ /(\d+)/g;
+$DEFAULT_RETRY_MAX = 3; # Retry up to this many times when network problems occur.
+$DEFAULT_RETRY_INTERVAL = 15; # Seconds to wait after response failure before trying again.
 
 sub new {
     my $class = shift;
@@ -24,9 +33,10 @@ sub new {
 sub api_user { my $self = shift; $self->{'api_user'} || $self->{'user'} || croak "Missing api_user" }
 sub api_pass { my $self = shift; $self->{'api_pass'} || $self->{'pass'} || croak "Missing api_pass" }
 sub api_host { my $self = shift; $self->{'api_host'} || $self->{'host'} || croak "Missing api_host" }
-sub api_port { my $self = shift; $self->{'api_port'} || $self->{'port'} || $self->use_ssl ? 443 : 80 }
+sub api_port { my $self = shift; $self->{'api_port'} || $self->{'port'} || ($self->use_ssl ? 443 : 80) }
 sub api_path { my $self = shift; $self->{'api_path'} || $self->{'path'} || '/cgi/yar' }
-sub use_ssl  { my $self = shift; $self->{'use_ssl'}  || $self->{'ssl'}  || 0 }
+sub use_ssl  { my $self = shift; $self->{'use_ssl'}  || $self->{'ssl'}  || 1 }
+sub ssl_verify_hostname { shift->{'ssl_verify_hostname'} || 0 }
 sub log_obj   {
     my $self = shift;
     if (! $self->{'log_obj'}) {
@@ -68,6 +78,7 @@ sub play_method {
 
     ### setup the request
     local $args->{'method'} = $meth;
+    die "Invalid method $meth" if $meth !~ /^[\w\.-]+$/;
     my $request = eval { $self->serialize_request($args) };
     if (! $request) {
         return Net::YAR::Fault->new({
@@ -81,7 +92,7 @@ sub play_method {
     ### send the request
     my $resp;
     my $proto = $self->use_ssl ? 'https' : 'http';
-    my $url   = "$proto://$host:$port$path";
+    my $url   = "$proto://$host:$port$path/$meth";
     my @head;
     if (! $args->{'authentication'}) {
         my $auth = "$user/$pass";
@@ -91,7 +102,7 @@ sub play_method {
 
     eval {
         my $req = HTTP::Request->new('POST', $url, HTTP::Headers->new(@head), $request);
-        #warn $req->as_string;;
+        #warn $req->as_string;
 
         my $log_obj = $self->log_obj;
         if ($log_obj) {
@@ -100,11 +111,27 @@ sub play_method {
             $log_obj->print(scalar(localtime).": REQUEST: $meth - $id\n",$request,"\n");
         }
 
-        my @lwp_args = eval { $args->{'lwp_args'} ? @{ $args->{'lwp_args'} } : () };
-        $resp = LWP::UserAgent->new(@lwp_args)->request($req);
+        my $lwp_args = ref($args->{'lwp_args'}) eq 'HASH' ? $args->{'lwp_args'} : ref($args->{'lwp_args'}) eq 'ARRAY' ? {@{$args->{'lwp_args'}}} : {};
+        local $lwp_args->{'ssl_opts'} = {} if ! $lwp_args->{'ssl_opts'};
+        local $lwp_args->{'ssl_opts'}->{'verify_hostname'} = $self->ssl_verify_hostname if ! exists $lwp_args->{'ssl_opts'}->{'verify_hostname'};
+        my $retries = defined $args->{'retry_max'}      ? $args->{'retry_max'}      : $DEFAULT_RETRY_MAX;
+        my $interval= defined $args->{'retry_interval'} ? $args->{'retry_interval'} : $DEFAULT_RETRY_INTERVAL;
+        $interval = 5 if $interval < 5;
+        while (1) {
+            $resp = LWP::UserAgent->new(%$lwp_args)->request($req);
+            last if $resp && $resp->is_success;
+            if ($retries-->0) {
+                if ($log_obj) {
+                    $log_obj->print(scalar(localtime).": FAILED RESPONSE (".(eval { $resp->code }).") with $retries retries left:\n".(eval { $resp->content })."\n\n");
+                }
+                sleep $interval;
+                next;
+            }
+            last;
+        }
 
         if ($log_obj) {
-            $log_obj->print(scalar(localtime).": RESPONSE (".($resp->code)."):\n",$resp->content,"\n\n");
+            $log_obj->print(scalar(localtime).": RESPONSE (".(eval { $resp->code })."):\n".(eval { $resp->content })."\n\n");
         }
     };
     if (! $resp || ! $resp->is_success) {
@@ -281,9 +308,40 @@ sub AUTOLOAD {
     ### handle all $yar->domain_register style commands
     elsif ($method =~ /^ (domain|contact|user|util|[^\W_]+) _+ (\w+) $/x) {
         my $yar_method = "$1.$2";
+        my $failovers = eval {
+            my $fails = $_[0]->{'failover'} or die "No failover";
+            my $mod = ucfirst($1).ucfirst($2);
+            require "Net/YAR/$mod.pm";
+            if (my $default = UNIVERSAL::can("Net::YAR::$mod","lwp_args_yar_default")) {
+                $_[0]->{'lwp_args'} ||= $default->();
+            }
+            $fails = [$fails] if "ARRAY" ne ref $fails;
+            my @code_refs = ();
+            foreach my $try (@$fails) {
+                if (my $code = UNIVERSAL::can("Net::YAR::$mod",$method."_$try")) {
+                    push @code_refs, $code;
+                }
+            }
+            return \@code_refs if @code_refs;
+            die "Net::Server::$mod - Unable to locate any failover for @$fails";
+        };
 
         my $resp;
         if (eval { $resp = $self->play_method($yar_method, @_); 1 }) {
+            if (!$resp) {
+                # Normal YAR request failed.
+                if ($failovers) {
+                    # Try Net::Yar::$mod->method_$try for each failover
+                    foreach my $code (@$failovers) {
+                        if (my $new_resp = eval { $code->($self, $resp, @_) }) {
+                            $resp = $new_resp;
+                            last;
+                        }
+                        else { warn "FAILOVER CRASHED: $@"; }
+                    }
+                }
+                $@ = "";
+            }
             $@ = $resp if ! $resp;
             return $resp;
         }
@@ -480,6 +538,8 @@ sub service      { shift->new_chain_proxy('service'     ) }
 sub user         { shift->new_chain_proxy('user'        ) }
 sub util         { shift->new_chain_proxy('util'        ) }
 sub whois        { shift->new_chain_proxy('whois'       ) }
+sub host         { shift->new_chain_proxy('host'        ) }
+sub dns          { shift->new_chain_proxy('dns'         ) }
 
 sub new_chain_proxy {
     my ($self, $type) = @_;
@@ -758,9 +818,16 @@ to connect to for YAR commands.
 
 =item use_ssl
 
-Defaults to $self->{use_ssl} which defaults to $self->{ssl} which defaults to 0.
+Defaults to $self->{use_ssl} which defaults to $self->{ssl} which defaults to 1.
 
-Setting to a true value will perform requests across a secure connection.
+Setting to a true value will perform requests across a secure connection.  Production
+systems will only support ssl.
+
+=item ssl_verify_hostname
+
+Defaults to $self->{ssl_verify_hostname} which defaults 0.
+
+Setting to a true value will perform certificate matching.
 
 =item api_path
 

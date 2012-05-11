@@ -1,6 +1,28 @@
 Net::YAR Changes Log
 ====================
 
+1.082 - 2012-04-27
+    * Add yar params 'retry_max' and 'retry_interval' to allow custom retries in case of network failure.
+
+1.081 - 2012-04-26
+    * Fix old precedence bug with api_port passing.
+    * Update all tests for changes in required information.
+
+1.080 - 2012-04-26
+    * Change use_ssl to default to 1.
+    * Add ssl_verify_hostname (default 0).
+    * Pass method as part of the url.
+
+1.079 - 2011-05-11
+    * Add Net::YAR::DomainCheck module for "whois" failover
+
+1.078 - 2011-05-02
+    * Add support for failover modules in case of
+      temporary Registrar or Registry problems.
+
+1.077 - 2011-02-17
+    * Add ->host-> and ->dns-> chaining proxy support.
+
 1.076 - 2010-01-12
     * Make sure JSON::encode for JSON 2.0 is used properly
 

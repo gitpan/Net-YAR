@@ -7,11 +7,12 @@
 =cut
 
 use strict;
-use Test::More tests => 22;
+use Test::More tests => 15;
+use Data::Dumper qw(Dumper);
 
 if (! $ENV{'TEST_NET_YAR_CONNECT'}) {
     SKIP: {
-        skip('Set TEST_NET_YAR_CONNECT to "user/pass/host" to run tests requiring connection', 22);
+        skip('Set TEST_NET_YAR_CONNECT to "user/pass/host" to run tests requiring connection', 15);
     };
     exit;
 }
@@ -63,7 +64,7 @@ ok($user_id, "Got a new user_id ($user_id)");
 
 $r = $yar->user_info({username => $username});
 ok($r, "Ran user_info");
-ok($r->data->{'password'} eq '123qwe', 'Password was correct');
+is($r->data->{'password'}, '-', 'Password is deprecated');
 
 $r = $yar->user_info({user_id => 1});
 ok(! $r, "Ran user_info");
@@ -75,28 +76,7 @@ $r = $yar->user_update({
     username => $username,
     password => '',
 });
-ok($r, "Ran user_update (set password to '')");
-ok($r->data->{'n_rows'} == 1, "Got the correct n_rows");
-
-$r = $yar->user_update({
-    username => $username,
-    password => 'ewq321',
-});
-ok($r, "Ran user_update");
-ok($r->data->{'n_rows'} == 1, "Got the correct n_rows");
-
-$r = $yar->user_update({
-    username => $username,
-    password => 'ewq321',
-});
-ok($r, "Ran user_update again");
-ok($r->data->{'n_rows'} == 0, "Got the correct n_rows");
-
-###----------------------------------------------------------------###
-
-$r = $yar->user_info({username => $username});
-ok($r, "Ran user_info");
-ok($r->data->{'password'} eq 'ewq321', 'Password was correct after update');
+ok(!$r, "Ran user_update with only password (deprecated)") || diag Dumper($r);
 
 ###----------------------------------------------------------------###
 
